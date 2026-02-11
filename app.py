@@ -88,33 +88,58 @@ def safe_parse_date(date_str):
 def compute_deal_metrics(df):
     if df.empty:
         return {"error": "No deal data available."}
-
-    df["value"] = pd.to_numeric(df["numeric_mm0f6tc2"], errors="coerce")
-    df["prob"] = df["color_mm0f30w0"].apply(normalize_probability)
+    
+    # 🔥 UPDATED COLUMN IDS
+    value_col = "numeric_mm0fnp3c"
+    prob_col = "color_mm0f7tfp"
+    sector_col = "dropdown_mm0fzywc"
+    stage_col = "color_mm0fjsk9"
+    status_col = "color_mm0fjsk9"  # adjust if needed
+    
+    if value_col not in df.columns:
+        return {"error": "Deal value column not found."}
+    
+    df["value"] = pd.to_numeric(df[value_col], errors="coerce")
+    df["prob"] = df[prob_col].apply(normalize_probability)
     df["weighted"] = df["value"] * df["prob"]
-
-    # Only open deals
-    df = df[df["color_mm0fqvp6"] == "Open"]
-
+    
+    df = df[df[status_col] == "Open"]
+    
     return {
         "total_pipeline": float(df["value"].sum(skipna=True)),
         "weighted_pipeline": float(df["weighted"].sum(skipna=True)),
-        "sector_breakdown": df.groupby("color_mm0fe66m")["value"].sum().to_dict(),
-        "stage_distribution": df["color_mm0f24qr"].value_counts().to_dict()
+        "sector_breakdown": df.groupby(sector_col)["value"].sum().to_dict(),
+        "stage_distribution": df[stage_col].value_counts().to_dict()
     }
 
 def compute_work_order_metrics(df):
     if df.empty:
         return {"error": "No work order data available."}
-
-    df["planned_date"] = df["date_mm0fpdes"].apply(safe_parse_date)
-    df["actual_date"] = df["date_mm0fz6jw"].apply(safe_parse_date)
+    
+    planned_col = "date_mm0fg87e"
+    actual_col = "date_mm0ftbwn"
+    sector_col = "color_mm0f5tdc"
+    status_col = "color_mm0fvzqp"
+    value_col = "numeric_mm0fqa9s"
+    
+    # Safety check
+    required_cols = [planned_col, actual_col, sector_col, status_col, value_col]
+    for col in required_cols:
+        if col not in df.columns:
+            return {"error": f"Missing column: {col}"}
+    
+    df["planned_date"] = df[planned_col].apply(safe_parse_date)
+    df["actual_date"] = df[actual_col].apply(safe_parse_date)
+    df["project_value"] = pd.to_numeric(df[value_col], errors="coerce")
     df["delay_days"] = (df["actual_date"] - df["planned_date"]).dt.days
-
+    
+    avg_delay = df["delay_days"].mean()
+    
     return {
-        "average_delay_days": float(df["delay_days"].mean()) if df["delay_days"].notna().any() else 0,
-        "sector_delay": df.groupby("color_mm0f5e45")["delay_days"].mean().dropna().to_dict(),
-        "execution_status_distribution": df["color_mm0fcx9e"].value_counts().to_dict()
+        "average_delay_days": float(avg_delay) if df["delay_days"].notna().any() else 0,
+        "sector_delay": df.groupby(sector_col)["delay_days"].mean().dropna().to_dict(),
+        "execution_status_distribution": df[status_col].value_counts().to_dict(),
+        "total_project_value": float(df["project_value"].sum(skipna=True))
     }
 
 # -----------------------------
